@@ -1,0 +1,32 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "check.exe on servo",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/check.exe",
+            "args": ["${input:port}", "${input:id}"],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build check.exe",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+            "externalConsole": false
+        },
+        {
+            "name": "check.exe packet checks only",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/check.exe",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build check.exe",
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+            "externalConsole": false
+        }
+    ],
+    "inputs": [
+        { "id": "port", "type": "promptString", "description": "COM port", "default": "COM11" },
+        { "id": "id", "type": "promptString", "description": "servo ID", "default": "1" }
+    ]
+}

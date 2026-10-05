@@ -1,0 +1,45 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build check.exe",
+            "type": "process",
+            "command": "C:/msys64/mingw64/bin/g++.exe",
+            "args": [
+                "-std=c++11",
+                "-Wall",
+                "-g",
+                "-o",
+                "check.exe",
+                "main.cpp",
+                "driver.cpp",
+                "packet.cpp",
+                "convert.cpp",
+                "register.cpp",
+                "platforms/windows.cpp"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "test_driver",
+            "type": "shell",
+            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -o test_driver.exe test_driver.cpp driver.cpp packet.cpp convert.cpp register.cpp; if ($?) { ./test_driver.exe }",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": "test"
+        }
+    ]
+}
