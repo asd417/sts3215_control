@@ -230,16 +230,16 @@ uint8_t *getPacketRX(uint8_t *sizeOut) {
   *sizeOut = sizeof rxbuf;
   return rxbuf;
 }
-PORT_HANDLE openPort(const char *, uint32_t) { return (PORT_HANDLE)1; }
+PORT_HANDLE openPort(uint32_t, const char *) { return (PORT_HANDLE)1; }
 void closePort(PORT_HANDLE) {}
-int setPlatformBaudRate(PORT_HANDLE, uint8_t baudIndex) {
+int setPlatformBaudRate(uint8_t baudIndex, PORT_HANDLE) {
   if (!baudFromIndex(baudIndex))
     return 1;
   hostBaud = baudIndex;
   return 0;
 }
 
-int sendPacket(PORT_HANDLE, uint8_t *out, const uint8_t size) {
+int sendPacket(uint8_t *out, const uint8_t size, PORT_HANDLE) {
   packetsSent++;
   rxq.clear();
   rxHead = 0;
@@ -296,7 +296,7 @@ int sendPacket(PORT_HANDLE, uint8_t *out, const uint8_t size) {
   return 0;
 }
 
-int readRX(PORT_HANDLE, uint8_t *buffer, const uint8_t size, uint32_t) {
+int readPacket(uint8_t *buffer, const uint8_t size, uint32_t, PORT_HANDLE) {
   if (rxq.size() - rxHead < size)
     return 1; // timeout
   memcpy(buffer, &rxq[rxHead], size);

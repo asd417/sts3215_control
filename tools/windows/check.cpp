@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     return 0;
 
   uint8_t id = argc > 2 ? (uint8_t)atoi(argv[2]) : 1;
-  PORT_HANDLE h = openPort(argv[1], 1000000);
+  PORT_HANDLE h = openPort(1000000, argv[1]);
   if (!h)
     return 1;
 

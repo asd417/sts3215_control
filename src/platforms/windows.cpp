@@ -1,10 +1,10 @@
 #if _WIN32
-#include "platform.h"
 #include "../register.h"
+#include "platform.h"
 
+#include <cassert>
 #include <string>
 #include <windows.h>
-
 
 #define TXPACKET_MAX_LEN 250
 #define RCPACKET_MAX_LEN 250
@@ -22,7 +22,7 @@ uint8_t *getPacketRX(uint8_t *sizeOut) {
   return rx;
 }
 
-PORT_HANDLE openPort(const char *name, uint32_t baudRate) {
+PORT_HANDLE openPort(uint32_t baudRate, const char* name) {
   std::string name_s = std::string(name);
   name_s = "\\\\.\\" + name_s;
   PORT_HANDLE h = CreateFileA(name_s.c_str(), // \\.\COM3 at runtime
@@ -71,7 +71,8 @@ PORT_HANDLE openPort(const char *name, uint32_t baudRate) {
   return h;
 }
 void closePort(PORT_HANDLE h) { CloseHandle(h); }
-int sendPacket(PORT_HANDLE h, uint8_t *outgoing, const uint8_t size) {
+int sendPacket(uint8_t *outgoing, const uint8_t size, PORT_HANDLE h) {
+  //assert(h != nullptr && "PORT_HANDLE can not be nullptr");
   PurgeComm(h, PURGE_RXCLEAR); // drop stale bytes before sending
   DWORD written = 0;
   if (!WriteFile(h, outgoing, size, &written, NULL) || written != size) {
@@ -80,8 +81,9 @@ int sendPacket(PORT_HANDLE h, uint8_t *outgoing, const uint8_t size) {
   }
   return 0;
 }
-int readRX(PORT_HANDLE h, uint8_t *buffer, const uint8_t size,
-           uint32_t timeout) {
+int readPacket(uint8_t *buffer, const uint8_t size, uint32_t timeout,
+           PORT_HANDLE h) {
+  //assert(h != nullptr && "PORT_HANDLE can not be nullptr");
   // each ReadFile call waits at most `timeout` ms
   COMMTIMEOUTS t = {0};
   t.ReadTotalTimeoutConstant = timeout;
@@ -104,8 +106,8 @@ int readRX(PORT_HANDLE h, uint8_t *buffer, const uint8_t size,
   return 0;
 }
 
-int setPlatformBaudRate(PORT_HANDLE h, uint8_t baudIndex)
-{
+int setPlatformBaudRate(uint8_t baudIndex, PORT_HANDLE h) {
+  //assert(h != nullptr && "PORT_HANDLE can not be nullptr");
   DCB dcb = {0};
   dcb.DCBlength = sizeof(DCB);
   GetCommState(h, &dcb);

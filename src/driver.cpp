@@ -24,14 +24,14 @@ static int readRegister(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
     return INCORRECT_WRITE_PACKET_SIZE;
   // send
   createReadPacket(w, ID, addr, size);
-  if (sendPacket(h, w, PACKET_SIZE_READ))
+  if (sendPacket(w, PACKET_SIZE_READ, h))
     return PACKET_SEND_FAILED;
   // start reading packet
   uint8_t r_size;
   uint8_t *r = getPacketRX(&r_size);
   if (r_size < PACKET_SIZE_OVERHEAD + size)
     return INCORRECT_READ_PACKET_SIZE;
-  int re = readRX(h, r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS);
+  int re = readPacket(r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS, h);
   if (re)
     return PACKET_TIMEOUT;
   uint8_t outID;
@@ -57,7 +57,7 @@ static int writeRegister(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
   if (w_size < PACKET_SIZE_WRITE_BASE + size)
     return INCORRECT_WRITE_PACKET_SIZE;
   createWritePacket(w, ID, size, *parms, addr);
-  if (sendPacket(h, w, PACKET_SIZE_WRITE_BASE + size))
+  if (sendPacket(w, PACKET_SIZE_WRITE_BASE + size, h))
     return PACKET_SEND_FAILED;
   // start reading packet
   if (ID == 0xFE)
@@ -66,7 +66,7 @@ static int writeRegister(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
   uint8_t *r = getPacketRX(&r_size);
   if (r_size < PACKET_SIZE_OVERHEAD)
     return INCORRECT_READ_PACKET_SIZE;
-  int re = readRX(h, r, PACKET_SIZE_OVERHEAD, READ_TIMEOUT_MS);
+  int re = readPacket(r, PACKET_SIZE_OVERHEAD, READ_TIMEOUT_MS, h);
   if (re)
     return PACKET_TIMEOUT;
   uint8_t outID;
@@ -744,12 +744,12 @@ static int writeBaud(PORT_HANDLE h, const uint8_t ID, uint8_t index,
   // ponytail: no settle delay before the next packet, add one to platform.h if
   // the check fails on a servo that did switch
   writeRegister(h, ID, ADDR_BAUD_RATE, SIZE_BAUD_RATE, &p, servoError);
-  if (setPlatformBaudRate(h, index))
+  if (setPlatformBaudRate(index, h))
     return CONNECTION_LOST;
   // the first exchange at the new rate proves the servo followed
   error = save ? setLock(h, ID, 1, servoError) : ping(h, ID, servoError);
   if (error) {
-    setPlatformBaudRate(h, old); // revert the system baud if necessary.
+    setPlatformBaudRate(old, h); // revert the system baud if necessary.
     if (save)
       setLock(h, ID, 1, servoError); // don't leave it unlocked
   }
@@ -878,7 +878,7 @@ static int readStatus(PORT_HANDLE h, const uint8_t ID, const uint8_t size,
   uint8_t *r = getPacketRX(&r_size);
   if (r_size < PACKET_SIZE_OVERHEAD + size)
     return INCORRECT_READ_PACKET_SIZE;
-  if (readRX(h, r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS))
+  if (readPacket(r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS, h))
     return PACKET_TIMEOUT;
   uint8_t outID;
   uint8_t outError;
@@ -900,7 +900,7 @@ int ping(PORT_HANDLE h, const uint8_t ID, int *servoError) {
   if (w_size < PACKET_SIZE_PING)
     return INCORRECT_WRITE_PACKET_SIZE;
   createPingPacket(w, ID);
-  if (sendPacket(h, w, PACKET_SIZE_PING))
+  if (sendPacket(w, PACKET_SIZE_PING, h))
     return PACKET_SEND_FAILED;
   return readStatus(h, ID, 0, nullptr, servoError);
 }
@@ -912,7 +912,7 @@ int regWrite(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
   if (w_size < PACKET_SIZE_REG_WRITE_BASE + size)
     return INCORRECT_WRITE_PACKET_SIZE;
   createRegWritePacket(w, ID, size, data, addr);
-  if (sendPacket(h, w, PACKET_SIZE_REG_WRITE_BASE + size))
+  if (sendPacket(w, PACKET_SIZE_REG_WRITE_BASE + size, h))
     return PACKET_SEND_FAILED;
   if (ID == 0xFE)
     return 0;
@@ -925,7 +925,7 @@ int action(PORT_HANDLE h) {
   if (w_size < PACKET_SIZE_ACTION)
     return INCORRECT_WRITE_PACKET_SIZE;
   createActionPacket(w, 0xFE);
-  return sendPacket(h, w, PACKET_SIZE_ACTION) ? PACKET_SEND_FAILED : 0;
+  return sendPacket(w, PACKET_SIZE_ACTION, h) ? PACKET_SEND_FAILED : 0;
 }
 
 int syncWrite(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
@@ -937,7 +937,7 @@ int syncWrite(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
   if (n > w_size)
     return INCORRECT_WRITE_PACKET_SIZE;
   createSyncWritePacket(w, count, addr, size, commandBuffer);
-  return sendPacket(h, w, (uint8_t)n) ? PACKET_SEND_FAILED : 0;
+  return sendPacket(w, (uint8_t)n, h) ? PACKET_SEND_FAILED : 0;
 }
 
 int syncRead(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
@@ -953,7 +953,7 @@ int syncRead(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
   if (r_size < PACKET_SIZE_OVERHEAD + size)
     return INCORRECT_READ_PACKET_SIZE;
   createSyncReadPacket(w, count, IDs, addr, size);
-  if (sendPacket(h, w, (uint8_t)n))
+  if (sendPacket(w, (uint8_t)n, h))
     return PACKET_SEND_FAILED;
   for (uint8_t i = 0; i < count; i++) {
     results[i] = PACKET_TIMEOUT;
@@ -962,7 +962,7 @@ int syncRead(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
   // one status packet per servo. each is filed by the ID inside it, not by
   // arrival order, so a silent servo doesn't shift the ones after it
   for (uint8_t k = 0; k < count; k++) {
-    if (readRX(h, r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS))
+    if (readPacket(r, PACKET_SIZE_OVERHEAD + size, READ_TIMEOUT_MS, h))
       break; // bus went quiet, nothing more is coming
     uint8_t id;
     uint8_t err;

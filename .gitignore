@@ -1,2 +1,4 @@
 *.exe
 .ipynb_checkpoints/
+build/
+.clangd

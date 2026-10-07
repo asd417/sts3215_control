@@ -19,7 +19,7 @@ powershell -NoProfile -Command "[System.IO.Ports.SerialPort]::GetPortNames()" > 
 
 set "FOUND="
 for /f %%p in ('findstr /v /x /l /g:"%BEFORE%" "%AFTER%"') do (
-  echo Adapter is on %%p      test with: check.exe %%p 1
+  echo Adapter is on %%p      test with: buildeck.exe %%p 1
   set "FOUND=1"
 )
 if not defined FOUND (

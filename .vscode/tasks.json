@@ -9,14 +9,15 @@
                 "-std=c++11",
                 "-Wall",
                 "-g",
+                "-Isrc",
                 "-o",
-                "check.exe",
-                "main.cpp",
-                "driver.cpp",
-                "packet.cpp",
-                "convert.cpp",
-                "register.cpp",
-                "platforms/windows.cpp"
+                "build/check.exe",
+                "tools/windows/check.cpp",
+                "src/driver.cpp",
+                "src/packet.cpp",
+                "src/convert.cpp",
+                "src/register.cpp",
+                "src/platforms/windows.cpp"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -32,7 +33,7 @@
         {
             "label": "test_driver",
             "type": "shell",
-            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -o test_driver.exe test_driver.cpp driver.cpp packet.cpp convert.cpp register.cpp; if ($?) { ./test_driver.exe }",
+            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -Isrc -o build/test_driver.exe tools/windows/test_driver.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp; if ($?) { ./build/test_driver.exe }",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
