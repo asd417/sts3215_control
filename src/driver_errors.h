@@ -13,3 +13,18 @@
 #define ID_IN_USE 12
 #define LEN_MISMATCH 13
 #define RANGE_ERROR 14
+
+//generic
+#define PF_READ_FAIL 15
+#define PF_SEND_FAIL 16
+#define PF_TIMEOUT_FAIL 17
+#define PF_TIMEOUT_SET_FAIL 18
+#define PF_BAUD_SET_FAIL 19
+
+//windows
+#define PF_PORT_OPEN_FAIL 20
+#define PF_COMMSTATE_FAIL 21
+
+#ifndef __AVR__ // not enough ram. just use error codes directly
+const char* errorToString(int error);
+#endif

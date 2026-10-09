@@ -7,6 +7,7 @@
 #include <string.h>
 #include <iostream>
 #include <random>
+#include <chrono>
 
 #include "driver.h"
 #include "packet.h"
@@ -43,7 +44,8 @@ static void checkPackets() {
 // prints one reading; result is a driver_errors.h code, 0 = ok
 static int show(const char *name, int result, long value, int servoError) {
   if (result)
-    printf("%-20s FAILED: result %d, servo error 0x%02X\n", name, result, servoError);
+    printf("%-20s FAILED: result %d, servo error 0x%02X (%s)\n", name, result,
+           servoError, servoErrorToString(servoError));
   else
     printf("%-20s %ld\n", name, value);
   return result;
@@ -54,21 +56,24 @@ int main(int argc, char **argv) {
   printf("packet checks ok\n");
   if (argc < 2)
     return 0;
-
+  int e = 0;
   uint8_t id = argc > 2 ? (uint8_t)atoi(argv[2]) : 1;
-  PORT_HANDLE h = openPort(1000000, argv[1]);
-  if (!h)
+  PORT_HANDLE h = nullptr;
+  e = openPort(1000000, &h, argv[1]);
+  if (e) {
+    std::cout << "Error: " << errorToString(e) << std::endl;
     return 1;
-
+  }
   int se = 0;
-  int e = ping(h, id, &se);
+  e = ping(h, id, &se);
   show("ping", e, id, se);
-  if (e) { // nothing else will work either
+  if (e) {
+    std::cout << "Error: " << errorToString(e) << std::endl;
     closePort(h);
-    return e;
+    return 1;
   }
 
-  // read only
+  // reads first; writes P gain and goal position further down
   uint8_t u8 = 0;
   uint16_t u16 = 0;
   int16_t s16 = 0;
@@ -97,28 +102,39 @@ int main(int argc, char **argv) {
   show("D gain", r, u8, se);
 
   r = setPGain(h, id, 20, &se);
-  show("set P gain", r, u8, se);
+  show("set P gain", r, 20, se);
   r = getPGain(h, id, &u8, &se);
   show("P gain", r, u8, se);
 
   std::mt19937 rng(std::random_device{}());
   std::uniform_int_distribution<int> dist(0, 4095); // both ends inclusive
   int target = dist(rng);
-  setGoalPosition(h, 1, target, &se);
-  int16_t pos;
-  r = getPresentPosition(h, id, &pos, &se);
-  int16_t delta = 1;
-  while (delta != 0 || abs(target - pos)>2)
-  {
-    int16_t newp = 0;
-    r = getPresentPosition(h, id, &newp, &se);
-    delta = newp - pos;
-    pos = newp;
-    show("present position", r, pos, se);
-    show("  position delta", r, delta, se);
+  r = setGoalPosition(h, id, target, &se);
+  if (show("goal position", r, target, se)) {
+    closePort(h);
+    return 1;
   }
-  std::cout << "done" << std::endl;
+  std::chrono::steady_clock clock;
+  auto start = clock.now();
 
+  int16_t pos = 0;
+  uint8_t isMoving;
+  int c = 0;
+  bool run = true;
+  std::chrono::steady_clock::time_point t = start;
+  while (run) {
+    r = getMoving(h, id, &isMoving, &se);
+    if (!(c % 10) || r)
+      show("get moving", r, isMoving, se);
+    if(r) break;
+    r = getPresentPosition(h, id, &pos, &se);
+    if(!(c%10) || r || !isMoving) show("present position", r, pos, se);
+    c++;
+    t=clock.now();
+    run = !r && isMoving && t-start < std::chrono::seconds(30);
+  }
+  std::cout << "Goal Position: " << target << " Final Position: " << pos << "\n"
+            << "Turn took: " << std::chrono::duration<double>(t-start).count() << "s" << std::endl;
   closePort(h);
   return 0;
 }

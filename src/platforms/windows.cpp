@@ -1,6 +1,7 @@
 #if _WIN32
 #include "../register.h"
 #include "platform.h"
+#include "driver_errors.h"
 
 #include <cassert>
 #include <string>
@@ -22,7 +23,7 @@ uint8_t *getPacketRX(uint8_t *sizeOut) {
   return rx;
 }
 
-PORT_HANDLE openPort(uint32_t baudRate, const char* name) {
+int openPort(uint32_t baudRate, PORT_HANDLE* out, const char* name) {
   std::string name_s = std::string(name);
   name_s = "\\\\.\\" + name_s;
   PORT_HANDLE h = CreateFileA(name_s.c_str(), // \\.\COM3 at runtime
@@ -35,7 +36,7 @@ PORT_HANDLE openPort(uint32_t baudRate, const char* name) {
 
   if (h == INVALID_HANDLE_VALUE) {
     printf("open failed, error %lu\n", GetLastError());
-    return nullptr;
+    return PF_PORT_OPEN_FAIL;
   }
   DCB dcb = {0};
   dcb.DCBlength = sizeof(DCB);
@@ -54,7 +55,7 @@ PORT_HANDLE openPort(uint32_t baudRate, const char* name) {
   if (!SetCommState(h, &dcb)) {
     printf("SetCommState failed, error %lu\n", GetLastError());
     CloseHandle(h);
-    return nullptr;
+    return PF_COMMSTATE_FAIL;
   }
   // ReadFile gives up after 50 ms total (all values in milliseconds)
   COMMTIMEOUTS t = {0};
@@ -65,10 +66,10 @@ PORT_HANDLE openPort(uint32_t baudRate, const char* name) {
   if (!SetCommTimeouts(h, &t)) {
     printf("SetCommTimeouts failed, error %lu\n", GetLastError());
     CloseHandle(h);
-    return nullptr;
+    return PF_TIMEOUT_SET_FAIL;
   }
-
-  return h;
+  *out = h;
+  return 0;
 }
 void closePort(PORT_HANDLE h) { CloseHandle(h); }
 int sendPacket(uint8_t *outgoing, const uint8_t size, PORT_HANDLE h) {
@@ -77,7 +78,7 @@ int sendPacket(uint8_t *outgoing, const uint8_t size, PORT_HANDLE h) {
   DWORD written = 0;
   if (!WriteFile(h, outgoing, size, &written, NULL) || written != size) {
     printf("write failed, error %lu\n", GetLastError());
-    return 1;
+    return PF_SEND_FAIL;
   }
   return 0;
 }
@@ -90,17 +91,17 @@ int readPacket(uint8_t *buffer, const uint8_t size, uint32_t timeout,
   t.WriteTotalTimeoutConstant = 50;
   if (!SetCommTimeouts(h, &t)) {
     printf("SetCommTimeouts failed, error %lu\n", GetLastError());
-    return 1;
+    return PF_TIMEOUT_SET_FAIL;
   }
   DWORD got = 0;
   while (got < size) {
     DWORD n = 0;
     if (!ReadFile(h, buffer + got, size - got, &n, NULL)) {
       printf("read failed, error %lu\n", GetLastError());
-      return 1;
+      return PF_READ_FAIL;
     }
     if (n == 0)
-      return 1; // timeout: servo sent fewer than size bytes
+      return PF_TIMEOUT_FAIL; // timeout: servo sent fewer than size bytes
     got += n;
   }
   return 0;
@@ -124,7 +125,7 @@ int setPlatformBaudRate(uint8_t baudIndex, PORT_HANDLE h) {
   dcb.fDtrControl = DTR_CONTROL_ENABLE;
   if (!SetCommState(h, &dcb)) {
     printf("SetCommState failed, error %lu\n", GetLastError());
-    return 1; // port stays open at its old rate
+    return PF_TIMEOUT_SET_FAIL; // port stays open at its old rate
   }
   return 0;
 }

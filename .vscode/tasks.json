@@ -17,6 +17,8 @@
                 "src/packet.cpp",
                 "src/convert.cpp",
                 "src/register.cpp",
+                "src/driver_errors.cpp",
+                "src/servo_errors.cpp",
                 "src/platforms/windows.cpp"
             ],
             "options": {
@@ -33,7 +35,7 @@
         {
             "label": "test_driver",
             "type": "shell",
-            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -Isrc -o build/test_driver.exe tools/windows/test_driver.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp; if ($?) { ./build/test_driver.exe }",
+            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -Isrc -o build/test_driver.exe tools/windows/test_driver.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp; if ($?) { ./build/test_driver.exe }",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

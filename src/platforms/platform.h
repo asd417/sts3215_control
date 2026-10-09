@@ -5,11 +5,11 @@
 typedef void *PORT_HANDLE;
 #endif
 #ifdef ARDUINO
-#include <Arduino.h> 
+#include <Arduino.h>
 typedef HardwareSerial *PORT_HANDLE;
 #endif
 
-PORT_HANDLE openPort(uint32_t baudRate, const char *name = nullptr);
+int openPort(uint32_t baudRate, PORT_HANDLE* out, const char *name = nullptr);
 void closePort(PORT_HANDLE h);
 
 //get the pointer to the packet buffer

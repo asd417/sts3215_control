@@ -894,7 +894,7 @@ static int readStatus(PORT_HANDLE h, const uint8_t ID, const uint8_t size,
   return 0;
 }
 
-int ping(PORT_HANDLE h, const uint8_t ID, int *servoError) {
+int   ping(PORT_HANDLE h, const uint8_t ID, int *servoError) {
   uint8_t w_size;
   uint8_t *w = getPacketTX(&w_size);
   if (w_size < PACKET_SIZE_PING)
