@@ -1,7 +1,7 @@
 // offline test: runs the real driver.cpp against a simulated bus of three STS
 // servos (IDs 1, 2, 3). no hardware is touched.
 // this file IS the platform, so build it without platforms/windows.cpp:
-//   g++ -std=c++11 test_driver.cpp driver.cpp packet.cpp convert.cpp register.cpp -o test_driver.exe
+//   g++ -std=c++11 simulated.cpp driver.cpp packet.cpp convert.cpp register.cpp -o simulated.exe
 //
 // the simulated servo checks every packet the driver sends (header, length,
 // checksum, and that a write covers exactly one or more whole writable

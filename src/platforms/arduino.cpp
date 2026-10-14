@@ -1,14 +1,14 @@
 
 #if ARDUINO
-#include "Arduino.h"
 #include <assert.h>
+#include "Arduino.h"
 #include "HardwareSerial.h"
 #include "platform.h"
-#include "driver_errors.h"
+#include "../driver_errors.h"
 #include "../register.h"
 
-#define TXPACKET_MAX_LEN 250
-#define RCPACKET_MAX_LEN 250
+#define TXPACKET_MAX_LEN 64
+#define RCPACKET_MAX_LEN 64
 
 static uint8_t tx[TXPACKET_MAX_LEN];
 static uint8_t rx[RCPACKET_MAX_LEN];
@@ -32,6 +32,9 @@ int openPort(uint32_t baudRate, PORT_HANDLE* out, const char *name) {
 #endif
 
 int sendPacket(uint8_t *outgoing, const uint8_t size, PORT_HANDLE h) {
+  if (!h) {
+    return PF_PORT_FAIL;
+  }
   while (h->available())
     h->read(); // clear
   if (h->availableForWrite() >= size)

@@ -20,10 +20,11 @@
 #define PF_TIMEOUT_FAIL 17
 #define PF_TIMEOUT_SET_FAIL 18
 #define PF_BAUD_SET_FAIL 19
+#define PF_PORT_FAIL 20
 
 //windows
-#define PF_PORT_OPEN_FAIL 20
-#define PF_COMMSTATE_FAIL 21
+#define PF_PORT_OPEN_FAIL 21
+#define PF_COMMSTATE_FAIL 22
 
 #ifndef __AVR__ // not enough ram. just use error codes directly
 const char* errorToString(int error);
