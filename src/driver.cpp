@@ -12,6 +12,110 @@
 // tighter timing
 #define READ_TIMEOUT_MS 50
 
+#define MAKE_GETTER_U8(name, reg)                                              \
+  int get##name(PORT_HANDLE h, const uint8_t ID, uint8_t *value,               \
+                int *servoError) {                                             \
+    uint8_t *p;                                                                \
+    *servoError = 0;                                                           \
+    int error = readRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);   \
+    if (error && error != SERVO_ERROR)                                         \
+      return error;                                                            \
+    *value = p[0];                                                             \
+    return error;                                                              \
+  }
+
+#define MAKE_GETTER_UNSIGNED(name, reg)                                        \
+  int get##name(PORT_HANDLE h, const uint8_t ID, uint16_t *value,              \
+                int *servoError) {                                             \
+    uint8_t *p;                                                                \
+    *servoError = 0;                                                           \
+    int error = readRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);   \
+    if (error && error != SERVO_ERROR)                                         \
+      return error;                                                            \
+    *value = (uint16_t)p[1] << 8 | p[0];                                       \
+    return error;                                                              \
+  }
+
+#define MAKE_GETTER_SIGNED(name, reg, signB)                                   \
+  int get##name(PORT_HANDLE h, const uint8_t ID, int16_t *value,               \
+                int *servoError) {                                             \
+    uint8_t *p;                                                                \
+    *servoError = 0;                                                           \
+    int error = readRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);   \
+    if (error && error != SERVO_ERROR)                                         \
+      return error;                                                            \
+    uint16_t raw = (uint16_t)p[1] << 8 | p[0];                                 \
+    *value = from_scs(raw, signB);                                             \
+    return error;                                                              \
+  }
+
+// plain write: RAM registers take effect now, EEPROM ones are lost at
+// power-off unless the servo is unlocked
+#define MAKE_SETTER_U8(name, reg, validMin, validMax)                          \
+  int set##name(PORT_HANDLE h, const uint8_t ID, uint8_t value,                \
+                int *servoError) {                                             \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t *p = &value;                                                       \
+    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
+  }
+
+
+
+#define MAKE_SETTER_U16(name, reg, validMin, validMax)                         \
+  int set##name(PORT_HANDLE h, const uint8_t ID, uint16_t value,               \
+                int *servoError) {                                             \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t d[2] = {makeLowByte(value), makeHighByte(value)};                  \
+    uint8_t *p = d;                                                            \
+    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
+  }
+
+// conv is the convert.h prefix, e.g. goalPosition -> goalPositionToLoHi
+#define MAKE_SETTER_S16(name, conv, reg, validMin, validMax)                   \
+  int set##name(PORT_HANDLE h, const uint8_t ID, int16_t value,                \
+                int *servoError) {                                             \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t d[2];                                                              \
+    conv##ToLoHi(value, &d[0], &d[1]);                                         \
+    uint8_t *p = d;                                                            \
+    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
+  }
+
+// setSave* variants: unlock, write, relock so EEPROM values persist
+#define MAKE_SAVE_SETTER_U8(name, reg, validMin, validMax)                     \
+  int setSave##name(PORT_HANDLE h, const uint8_t ID, uint8_t value,            \
+                    int *servoError) {                                         \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t *p = &value;                                                       \
+    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
+  }
+
+#define MAKE_SAVE_SETTER_U16(name, reg, validMin, validMax)                    \
+  int setSave##name(PORT_HANDLE h, const uint8_t ID, uint16_t value,           \
+                    int *servoError) {                                         \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t d[2] = {makeLowByte(value), makeHighByte(value)};                  \
+    uint8_t *p = d;                                                            \
+    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
+  }
+
+// conv is the convert.h prefix, e.g. goalPosition -> goalPositionToLoHi
+#define MAKE_SAVE_SETTER_S16(name, conv, reg, validMin, validMax)              \
+  int setSave##name(PORT_HANDLE h, const uint8_t ID, int16_t value,            \
+                    int *servoError) {                                         \
+    if (value < validMin || value > validMax)                                  \
+      return RANGE_ERROR;                                                      \
+    uint8_t d[2];                                                              \
+    conv##ToLoHi(value, &d[0], &d[1]);                                         \
+    uint8_t *p = d;                                                            \
+    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
+  }
+
 // shared read flow: on success *parms points at `size` data bytes in the RX
 // buffer (valid until the next read)
 static int readRegister(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
@@ -83,561 +187,62 @@ static int writeRegister(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
   return 0;
 }
 
-int getFirmwareMajor(PORT_HANDLE h, const uint8_t ID, uint8_t *major,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_FIRMWARE_MAJOR, SIZE_FIRMWARE_MAJOR, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *major = p[0];
-  return error;
-}
-
 /* 1 byte */
-
-int getFirmwareMinor(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_FIRMWARE_MINOR, SIZE_FIRMWARE_MINOR, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getID(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_ID, SIZE_ID, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getBaudRate(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_BAUD_RATE, SIZE_BAUD_RATE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getReturnDelay(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                   int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_RETURN_DELAY, SIZE_RETURN_DELAY, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getResponseLevel(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_RESPONSE_LEVEL, SIZE_RESPONSE_LEVEL, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getMaxTemperature(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_MAX_TEMPERATURE, SIZE_MAX_TEMPERATURE,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getMaxVoltage(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                  int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_MAX_VOLTAGE, SIZE_MAX_VOLTAGE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getMinVoltage(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                  int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_MIN_VOLTAGE, SIZE_MIN_VOLTAGE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getPhase(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PHASE, SIZE_PHASE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getUnloadingCondition(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                          int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_UNLOADING_CONDITION,
-                           SIZE_UNLOADING_CONDITION, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getLedAlarmCondition(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                         int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_LED_ALARM_CONDITION,
-                           SIZE_LED_ALARM_CONDITION, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getPGain(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_P_GAIN, SIZE_P_GAIN, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getDGain(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_D_GAIN, SIZE_D_GAIN, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getIGain(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_I_GAIN, SIZE_I_GAIN, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getCwDeadZone(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                  int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_CW_DEAD_ZONE, SIZE_CW_DEAD_ZONE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getCcwDeadZone(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                   int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_CCW_DEAD_ZONE, SIZE_CCW_DEAD_ZONE, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getAngularResolution(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                         int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_ANGULAR_RESOLUTION,
-                           SIZE_ANGULAR_RESOLUTION, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getOperatingMode(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_OPERATING_MODE, SIZE_OPERATING_MODE, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getProtectiveTorque(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                        int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PROTECTIVE_TORQUE,
-                           SIZE_PROTECTIVE_TORQUE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getProtectionTime(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PROTECTION_TIME, SIZE_PROTECTION_TIME,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getOverloadTorque(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_OVERLOAD_TORQUE, SIZE_OVERLOAD_TORQUE,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getSpeedPGain(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                  int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_SPEED_P_GAIN, SIZE_SPEED_P_GAIN, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getOvercurrentTime(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                       int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_OVERCURRENT_TIME, SIZE_OVERCURRENT_TIME,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getSpeedIGain(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                  int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_SPEED_I_GAIN, SIZE_SPEED_I_GAIN, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getTorqueEnable(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                    int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_TORQUE_ENABLE, SIZE_TORQUE_ENABLE, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getAcceleration(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                    int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_ACCELERATION, SIZE_ACCELERATION, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getLock(PORT_HANDLE h, const uint8_t ID, uint8_t *value, int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_LOCK, SIZE_LOCK, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getPresentVoltage(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PRESENT_VOLTAGE, SIZE_PRESENT_VOLTAGE,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getPresentTemperature(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-                          int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PRESENT_TEMPERATURE,
-                           SIZE_PRESENT_TEMPERATURE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getStatus(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-              int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_STATUS, SIZE_STATUS, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
-
-int getMoving(PORT_HANDLE h, const uint8_t ID, uint8_t *value,
-              int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_MOVING, SIZE_MOVING, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = p[0];
-  return error;
-}
+MAKE_GETTER_U8(FirmwareMajor, FIRMWARE_MAJOR)
+MAKE_GETTER_U8(FirmwareMinor, FIRMWARE_MINOR)
+MAKE_GETTER_U8(ID, ID)
+MAKE_GETTER_U8(BaudRate, BAUD_RATE)
+MAKE_GETTER_U8(ReturnDelay, RETURN_DELAY)
+MAKE_GETTER_U8(ResponseLevel, RESPONSE_LEVEL)
+MAKE_GETTER_U8(MaxTemperature, MAX_TEMPERATURE)
+MAKE_GETTER_U8(MaxVoltage, MAX_VOLTAGE)
+MAKE_GETTER_U8(MinVoltage, MIN_VOLTAGE)
+MAKE_GETTER_U8(Phase, PHASE)
+MAKE_GETTER_U8(UnloadingCondition, UNLOADING_CONDITION)
+MAKE_GETTER_U8(LedAlarmCondition, LED_ALARM_CONDITION)
+MAKE_GETTER_U8(PGain, P_GAIN)
+MAKE_GETTER_U8(DGain, D_GAIN)
+MAKE_GETTER_U8(IGain, I_GAIN)
+MAKE_GETTER_U8(CwDeadZone, CW_DEAD_ZONE)
+MAKE_GETTER_U8(CcwDeadZone, CCW_DEAD_ZONE)
+MAKE_GETTER_U8(AngularResolution, ANGULAR_RESOLUTION)
+MAKE_GETTER_U8(OperatingMode, OPERATING_MODE)
+MAKE_GETTER_U8(ProtectiveTorque, PROTECTIVE_TORQUE)
+MAKE_GETTER_U8(ProtectionTime, PROTECTION_TIME)
+MAKE_GETTER_U8(OverloadTorque, OVERLOAD_TORQUE)
+MAKE_GETTER_U8(SpeedPGain, SPEED_P_GAIN)
+MAKE_GETTER_U8(OvercurrentTime, OVERCURRENT_TIME)
+MAKE_GETTER_U8(SpeedIGain, SPEED_I_GAIN)
+MAKE_GETTER_U8(TorqueEnable, TORQUE_ENABLE)
+MAKE_GETTER_U8(Acceleration, ACCELERATION)
+MAKE_GETTER_U8(Lock, LOCK)
+MAKE_GETTER_U8(PresentVoltage, PRESENT_VOLTAGE)
+MAKE_GETTER_U8(PresentTemperature, PRESENT_TEMPERATURE)
+MAKE_GETTER_U8(Status, STATUS)
+MAKE_GETTER_U8(Moving, MOVING)
 
 /* 2 bytes, unsigned, low byte first */
-
-int getModelNumber(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                   int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_MODEL_NUM, SIZE_MODEL_NUM, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getMinAngleLimit(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_MIN_ANGLE_LIMIT, SIZE_MIN_ANGLE_LIMIT,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getMaxAngleLimit(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                     int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_MAX_ANGLE_LIMIT, SIZE_MAX_ANGLE_LIMIT,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getMaxTorque(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                 int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_MAX_TORQUE, SIZE_MAX_TORQUE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getMinStartupForce(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                       int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_MIN_STARTUP_FORCE,
-                           SIZE_MIN_STARTUP_FORCE, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getProtectionCurrent(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                         int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PROTECTION_CURRENT,
-                           SIZE_PROTECTION_CURRENT, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getTorqueLimit(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                   int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_TORQUE_LIMIT, SIZE_TORQUE_LIMIT, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
-
-int getPresentCurrent(PORT_HANDLE h, const uint8_t ID, uint16_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PRESENT_CURRENT, SIZE_PRESENT_CURRENT,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = (uint16_t)p[1] << 8 | p[0];
-  return error;
-}
+MAKE_GETTER_UNSIGNED(ModelNumber, MODEL_NUM)
+MAKE_GETTER_UNSIGNED(MinAngleLimit, MIN_ANGLE_LIMIT)
+MAKE_GETTER_UNSIGNED(MaxAngleLimit, MAX_ANGLE_LIMIT)
+MAKE_GETTER_UNSIGNED(MaxTorque, MAX_TORQUE)
+MAKE_GETTER_UNSIGNED(MinStartupForce, MIN_STARTUP_FORCE)
+MAKE_GETTER_UNSIGNED(ProtectionCurrent, PROTECTION_CURRENT)
+MAKE_GETTER_UNSIGNED(TorqueLimit, TORQUE_LIMIT)
+MAKE_GETTER_UNSIGNED(PresentCurrent, PRESENT_CURRENT)
 
 /* 2 bytes, sign-magnitude */
+MAKE_GETTER_SIGNED(PositionOffset, POSITION_OFFSET, SIGN_POS_OFFSET)
+MAKE_GETTER_SIGNED(GoalPosition, GOAL_POSITION, SIGN_GOAL_POS)
+MAKE_GETTER_SIGNED(GoalTime, GOAL_TIME, SIGN_GOAL_TIME)
+MAKE_GETTER_SIGNED(GoalSpeed, GOAL_SPEED, SIGN_GOAL_SPEED_WHEEL)
+MAKE_GETTER_SIGNED(PresentPosition, PRESENT_POSITION, SIGN_PRESENT)
+MAKE_GETTER_SIGNED(PresentSpeed, PRESENT_SPEED, SIGN_SPEED)
+MAKE_GETTER_SIGNED(PresentLoad, PRESENT_LOAD, SIGN_LOAD)
 
-int getPositionOffset(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                      int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_POSITION_OFFSET, SIZE_POSITION_OFFSET,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = positionOffsetFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getGoalPosition(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                    int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_GOAL_POSITION, SIZE_GOAL_POSITION, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = goalPositionFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getGoalTime(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_GOAL_TIME, SIZE_GOAL_TIME, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = goalTimeFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getGoalSpeed(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                 int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_GOAL_SPEED, SIZE_GOAL_SPEED, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = goalSpeedFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getPresentPosition(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                       int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PRESENT_POSITION, SIZE_PRESENT_POSITION,
-                           &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error; //return immediately 
-  *value = presentPositionFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getPresentSpeed(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                    int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error = readRegister(h, ID, ADDR_PRESENT_SPEED, SIZE_PRESENT_SPEED, &p,
-                           servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = presentSpeedFromLoHi(p[0], p[1]);
-  return error;
-}
-
-int getPresentLoad(PORT_HANDLE h, const uint8_t ID, int16_t *value,
-                   int *servoError) {
-  uint8_t *p;
-  *servoError = 0;
-  int error =
-      readRegister(h, ID, ADDR_PRESENT_LOAD, SIZE_PRESENT_LOAD, &p, servoError);
-  if (error && error != SERVO_ERROR)
-    return error;
-  *value = presentLoadFromLoHi(p[0], p[1]);
-  return error;
-}
+#undef MAKE_GETTER_U8
+#undef MAKE_GETTER_UNSIGNED
+#undef MAKE_GETTER_SIGNED
 
 /* setters */
 
@@ -656,75 +261,11 @@ static int writeEEPROM(PORT_HANDLE h, const uint8_t ID, const uint8_t addr,
   return error ? error : relock;
 }
 
-// plain write: RAM registers take effect now, EEPROM ones are lost at
-// power-off unless the servo is unlocked
-#define MAKE_SETTER_U8(name, reg, validMin, validMax)                          \
-  int set##name(PORT_HANDLE h, const uint8_t ID, uint8_t value,                \
-                int *servoError) {                                             \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t *p = &value;                                                       \
-    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
-  }
-
-#define MAKE_SETTER_U16(name, reg, validMin, validMax)                         \
-  int set##name(PORT_HANDLE h, const uint8_t ID, uint16_t value,               \
-                int *servoError) {                                             \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t d[2] = {makeLowByte(value), makeHighByte(value)};                  \
-    uint8_t *p = d;                                                            \
-    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
-  }
-
-// conv is the convert.h prefix, e.g. goalPosition -> goalPositionToLoHi
-#define MAKE_SETTER_S16(name, conv, reg, validMin, validMax)                   \
-  int set##name(PORT_HANDLE h, const uint8_t ID, int16_t value,                \
-                int *servoError) {                                             \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t d[2];                                                              \
-    conv##ToLoHi(value, &d[0], &d[1]);                                         \
-    uint8_t *p = d;                                                            \
-    return writeRegister(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);       \
-  }
-
-// setSave* variants: unlock, write, relock so EEPROM values persist
-#define MAKE_SAVE_SETTER_U8(name, reg, validMin, validMax)                     \
-  int setSave##name(PORT_HANDLE h, const uint8_t ID, uint8_t value,            \
-                    int *servoError) {                                         \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t *p = &value;                                                       \
-    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
-  }
-
-#define MAKE_SAVE_SETTER_U16(name, reg, validMin, validMax)                    \
-  int setSave##name(PORT_HANDLE h, const uint8_t ID, uint16_t value,           \
-                    int *servoError) {                                         \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t d[2] = {makeLowByte(value), makeHighByte(value)};                  \
-    uint8_t *p = d;                                                            \
-    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
-  }
-
-// conv is the convert.h prefix, e.g. goalPosition -> goalPositionToLoHi
-#define MAKE_SAVE_SETTER_S16(name, conv, reg, validMin, validMax)              \
-  int setSave##name(PORT_HANDLE h, const uint8_t ID, int16_t value,            \
-                    int *servoError) {                                         \
-    if (value < validMin || value > validMax)                                  \
-      return RANGE_ERROR;                                                      \
-    uint8_t d[2];                                                              \
-    conv##ToLoHi(value, &d[0], &d[1]);                                         \
-    uint8_t *p = d;                                                            \
-    return writeEEPROM(h, ID, ADDR_##reg, SIZE_##reg, &p, servoError);         \
-  }
-
 /* EEPROM: set* is temporary, setSave* persists. setID is written by hand below
  */
 
-// baud needs to be written in a special way because it also needs to be change on the platform side before reading the response from the motor
+// baud needs to be written in a special way because it also needs to be change
+// on the platform side before reading the response from the motor
 static int writeBaud(PORT_HANDLE h, const uint8_t ID, uint8_t index,
                      const bool save, int *servoError) {
   // broadcast can't be read back or verified
@@ -740,9 +281,9 @@ static int writeBaud(PORT_HANDLE h, const uint8_t ID, uint8_t index,
       return error;
   }
   uint8_t *p = &index;
-  // result ignored: the reply may arrive at either rate. the check below decides
-  // ponytail: no settle delay before the next packet, add one to platform.h if
-  // the check fails on a servo that did switch
+  // result ignored: the reply may arrive at either rate. the check below
+  // decides ponytail: no settle delay before the next packet, add one to
+  // platform.h if the check fails on a servo that did switch
   writeRegister(h, ID, ADDR_BAUD_RATE, SIZE_BAUD_RATE, &p, servoError);
   if (setPlatformBaudRate(index, h))
     return CONNECTION_LOST;
@@ -775,7 +316,7 @@ MAKE_SETTER_U16(MaxAngleLimit, MAX_ANGLE_LIMIT, 0, 32767)
 MAKE_SAVE_SETTER_U16(MaxAngleLimit, MAX_ANGLE_LIMIT, 0, 32767)
 MAKE_SETTER_U8(MaxTemperature, MAX_TEMPERATURE, 0, 100)
 MAKE_SAVE_SETTER_U8(MaxTemperature, MAX_TEMPERATURE, 0, 100)
-MAKE_SETTER_U8(MaxVoltage, MAX_VOLTAGE, 0, 254) 
+MAKE_SETTER_U8(MaxVoltage, MAX_VOLTAGE, 0, 254)
 MAKE_SAVE_SETTER_U8(MaxVoltage, MAX_VOLTAGE, 0, 254)
 MAKE_SETTER_U8(MinVoltage, MIN_VOLTAGE, 0, 254)
 MAKE_SAVE_SETTER_U8(MinVoltage, MIN_VOLTAGE, 0, 254)
@@ -804,7 +345,8 @@ MAKE_SAVE_SETTER_U16(ProtectionCurrent, PROTECTION_CURRENT, 0, 511)
 MAKE_SETTER_U8(AngularResolution, ANGULAR_RESOLUTION, 1, 3)
 MAKE_SAVE_SETTER_U8(AngularResolution, ANGULAR_RESOLUTION, 1, 3)
 MAKE_SETTER_S16(PositionOffset, positionOffset, POSITION_OFFSET, -2047, 2047)
-MAKE_SAVE_SETTER_S16(PositionOffset, positionOffset, POSITION_OFFSET, -2047, 2047)
+MAKE_SAVE_SETTER_S16(PositionOffset, positionOffset, POSITION_OFFSET, -2047,
+                     2047)
 MAKE_SETTER_U8(OperatingMode, OPERATING_MODE, 0, 3)
 MAKE_SAVE_SETTER_U8(OperatingMode, OPERATING_MODE, 0, 3)
 MAKE_SETTER_U8(ProtectiveTorque, PROTECTIVE_TORQUE, 0, 100)
@@ -836,12 +378,12 @@ MAKE_SETTER_U8(Lock, LOCK, 0, 1)
 #undef MAKE_SAVE_SETTER_U16
 #undef MAKE_SAVE_SETTER_S16
 
-//Register 40 Write 128: Arbitrary current position correction to 2048.
-int setCalibrateCurrentPos(PORT_HANDLE h, const uint8_t ID, int *servoError) 
-{
+// Register 40 Write 128: Arbitrary current position correction to 2048.
+int setCalibrateCurrentPos(PORT_HANDLE h, const uint8_t ID, int *servoError) {
   uint8_t v = 128;
   uint8_t *vp = &v;
-  return writeRegister(h, ID, ADDR_TORQUE_ENABLE, SIZE_TORQUE_ENABLE, &vp, servoError);
+  return writeRegister(h, ID, ADDR_TORQUE_ENABLE, SIZE_TORQUE_ENABLE, &vp,
+                       servoError);
 }
 
 // relock goes to the new ID: the servo answers only to `value` after the write
@@ -894,7 +436,7 @@ static int readStatus(PORT_HANDLE h, const uint8_t ID, const uint8_t size,
   return 0;
 }
 
-int   ping(PORT_HANDLE h, const uint8_t ID, int *servoError) {
+int ping(PORT_HANDLE h, const uint8_t ID, int *servoError) {
   uint8_t w_size;
   uint8_t *w = getPacketTX(&w_size);
   if (w_size < PACKET_SIZE_PING)
@@ -985,10 +527,10 @@ int syncRead(PORT_HANDLE h, const uint8_t addr, const uint8_t size,
   return 0;
 }
 
-
-  // The same thing with your functions
-  // 1. setTorqueEnable(h, id, 0, &se), then move the joint to centre by hand.
-  // 2. setSavePositionOffset(h, id, 0, &se), setSaveMinAngleLimit(h, id, 0, &se), setSaveMaxAngleLimit(h, id, 4095, &se).
-  // 3. getPresentPosition(h, id, &raw, &se).
-  // 4. setSavePositionOffset(h, id, raw - 2047, &se).
-  // 5. Check: getPresentPosition should now read 2047.
+// The same thing with your functions
+// 1. setTorqueEnable(h, id, 0, &se), then move the joint to centre by hand.
+// 2. setSavePositionOffset(h, id, 0, &se), setSaveMinAngleLimit(h, id, 0, &se),
+// setSaveMaxAngleLimit(h, id, 4095, &se).
+// 3. getPresentPosition(h, id, &raw, &se).
+// 4. setSavePositionOffset(h, id, raw - 2047, &se).
+// 5. Check: getPresentPosition should now read 2047.

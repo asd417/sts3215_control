@@ -168,3 +168,13 @@ int syncWrite(PORT_HANDLE h, const uint8_t addr, const uint8_t size, const uint8
 // returns 0 if every servo succeeded, else the first nonzero results[i]
 int syncRead(PORT_HANDLE h, const uint8_t addr, const uint8_t size, const uint8_t count,
              uint8_t *IDs, uint8_t *out, uint8_t *results, uint8_t *servoErrors);
+
+struct Instruction16 {
+  uint8_t ID;
+  char hi;
+  char lo;
+};
+struct Instruction8 {
+  uint8_t ID;
+  uint8_t val;
+};

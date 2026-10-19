@@ -2,24 +2,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "check.exe on servo",
+            "name": "driver_test.exe on servo",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/check.exe",
+            "program": "${workspaceFolder}/build/driver_test.exe",
             "args": ["${input:port}", "${input:id}"],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build check.exe",
+            "preLaunchTask": "build driver_test.exe",
             "MIMode": "gdb",
             "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
             "externalConsole": false
         },
         {
-            "name": "check.exe packet checks only",
+            "name": "driver_test.exe packet checks only",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/check.exe",
+            "program": "${workspaceFolder}/build/driver_test.exe",
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "build check.exe",
+            "preLaunchTask": "build driver_test.exe",
             "MIMode": "gdb",
             "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
             "externalConsole": false
