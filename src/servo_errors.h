@@ -29,5 +29,5 @@ constexpr uint8_t SERVO_ERROR_CURRENT  = 0b001000;
 constexpr uint8_t SERVO_ERROR_OVERLOAD = 0b100000;
 
 #ifndef __AVR__ // not enough ram. just use error codes directly
-const char* servoErrorToString(int error);
+const char* servoErrorToString(uint8_t error);
 #endif

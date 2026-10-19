@@ -1,4 +1,6 @@
 #pragma once
+#include <stdint.h>
+
 #define INCORRECT_WRITE_PACKET_SIZE 1
 #define INCORRECT_READ_PACKET_SIZE 2
 #define INCORRECT_RX_HEADER 3
@@ -27,5 +29,5 @@
 #define PF_COMMSTATE_FAIL 22
 
 #ifndef __AVR__ // not enough ram. just use error codes directly
-const char* errorToString(int error);
+const char* errorToString(uint8_t error);
 #endif

@@ -42,7 +42,7 @@ static void checkPackets() {
 }
 
 // prints one reading; result is a driver_errors.h code, 0 = ok
-static int show(const char *name, int result, long value, int servoError) {
+static uint8_t show(const char *name, uint8_t result, long value, uint8_t servoError) {
   if (result)
     printf("%-20s FAILED: result %d, servo error 0x%02X (%s)\n", name, result,
            servoError, servoErrorToString(servoError));
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     std::cout << "Error: " << errorToString(e) << std::endl;
     return 1;
   }
-  int se = 0;
+  uint8_t se = 0;
   e = ping(h, id, &se);
   show("ping", e, id, se);
   if (e) {
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
   int16_t s16 = 0;
   // read into r first: argument evaluation order is unspecified, so passing
   // the getter and its output to show() together can print the stale value
-  int r;
+  uint8_t r;
   r = getModelNumber(h, id, &u16, &se);
   show("model number", r, u16, se);
   r = getFirmwareMajor(h, id, &u8, &se);

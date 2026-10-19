@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "driver.h"
+#include "driver_util.h" // raw syncRead/syncWrite/regWrite/action
 #include "register.h"
 
 /* ---- memory table typed in from the Feetech STS documentation, deliberately
@@ -317,7 +318,7 @@ static const char *ctx = "";
   } while (0)
 
 static const PORT_HANDLE H = (PORT_HANDLE)1;
-static int se;
+static uint8_t se;
 static Servo before[3];
 static int violationsBefore;
 
@@ -330,7 +331,7 @@ static void begin(const char *name) {
 }
 
 // after a setter on servo 1: exactly `bytes` landed at addr, nothing else moved
-static void expectWrite(int result, uint8_t addr, const uint8_t *bytes, uint8_t n,
+static void expectWrite(uint8_t result, uint8_t addr, const uint8_t *bytes, uint8_t n,
                         bool save) {
   Servo &s = servos[0];
   CHECK(result == 0);
@@ -674,7 +675,7 @@ static void baudCase(const char *name, bool save, bool replyAtNew, bool ignore) 
   baudReplyAtNewRate = replyAtNew;
   ignoreBaudWrite = ignore;
   Servo &s = servos[0];
-  int r = save ? setSaveBaudRate(H, 1, 4, &se) : setBaudRate(H, 1, 4, &se);
+  uint8_t r = save ? setSaveBaudRate(H, 1, 4, &se) : setBaudRate(H, 1, 4, &se);
   CHECK(violations == violationsBefore);
   CHECK(s.mem[A_LOCK] == 1); // never left unlocked
   if (!ignore) {

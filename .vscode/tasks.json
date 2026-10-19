@@ -14,6 +14,7 @@
                 "build/driver_test.exe",
                 "tools/windows/driver_test.cpp",
                 "src/driver.cpp",
+                "src/driver_util.cpp",
                 "src/packet.cpp",
                 "src/convert.cpp",
                 "src/register.cpp",
@@ -35,7 +36,7 @@
         {
             "label": "simulated",
             "type": "shell",
-            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -Isrc -o build/simulated.exe tools/windows/simulated.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp; if ($?) { ./build/simulated.exe }",
+            "command": "C:/msys64/mingw64/bin/g++.exe -std=c++11 -Wall -Isrc -o build/simulated.exe tools/windows/simulated.cpp src/driver.cpp src/driver_util.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp; if ($?) { ./build/simulated.exe }",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

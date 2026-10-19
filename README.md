@@ -5,7 +5,7 @@ C++11 driver for Feetech STS3215 serial bus servos. Windows serial backend; Ardu
 ## Build
 
 ```
-g++ -std=c++11 -Isrc -o build/driver_test.exe tools/windows/driver_test.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp src/platforms/windows.cpp
+g++ -std=c++11 -Isrc -o build/driver_test.exe tools/windows/driver_test.cpp src/driver.cpp src/driver_util.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp src/platforms/windows.cpp
 ```
 
 ## Run
@@ -18,7 +18,7 @@ build\driver_test.exe COM11 1 ping and read servo ID 1 on COM11 (1 Mbaud)
 Offline driver test with a simulated bus:
 
 ```
-g++ -std=c++11 -Isrc -o build/simulated.exe tools/windows/simulated.cpp src/driver.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp
+g++ -std=c++11 -Isrc -o build/simulated.exe tools/windows/simulated.cpp src/driver.cpp src/driver_util.cpp src/packet.cpp src/convert.cpp src/register.cpp src/driver_errors.cpp src/servo_errors.cpp
 build\simulated.exe
 ```
 

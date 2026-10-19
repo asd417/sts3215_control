@@ -4,7 +4,7 @@
 // error is the servo's error byte. several bits can be set at once: a single
 // bit gets its own message, a combination gets "Multiple servo errors", so
 // pass one bit at a time to name each.
-const char *servoErrorToString(int error) {
+const char *servoErrorToString(uint8_t error) {
   switch (error) {
   case 0:
     return "OK";

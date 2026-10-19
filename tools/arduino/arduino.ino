@@ -7,7 +7,7 @@ const uint8_t SERVO_ID = 1;
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   PORT_HANDLE port = nullptr;
-  int servoError = 0;
+  uint8_t servoError = 0;
   if (!openPort(1000000, &port) && !ping(port, SERVO_ID, &servoError) && !servoError)
     digitalWrite(LED_BUILTIN, HIGH);
 }

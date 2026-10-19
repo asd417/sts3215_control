@@ -1,7 +1,7 @@
 #include "driver_errors.h"
 
 #ifndef __AVR__
-const char* errorToString(int error) {
+const char* errorToString(uint8_t error) {
   switch (error) {
   case 0:
     return "OK";
