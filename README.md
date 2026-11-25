@@ -1,6 +1,6 @@
 # sts3215_control
 
-C++11 driver for Feetech STS3215 serial bus servos. Windows serial backend; Arduino backend not written yet. Work in progress.
+C++11 driver for Feetech STS3215 serial bus servos.
 
 ## Build
 
